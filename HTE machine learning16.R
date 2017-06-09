@@ -1,5 +1,7 @@
 rm(list=ls())
 ptm <- proc.time()
+
+ # First install from CRAN
 library(matrixStats)
 library(psych)
 library(bindata)
@@ -20,7 +22,7 @@ library(randomForest)
 library(ggplot2)
 library(xgboost)
 library(data.table)
-library(h2o)  # First install from CRAN
+library(h2o) 
 library(h2oEnsemble)
 localH2O <- h2o.init(nthreads = -1)
 
