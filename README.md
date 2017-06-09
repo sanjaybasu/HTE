@@ -1,4 +1,4 @@
-# HTE
+# Identification of heterogeneous treatment effects in clinical trial data
 
 Identifying heterogeneous treatment effects (HTEs)—systematically different benefits or risks from a medical therapy among some participants in a study, as compared to the study average—is clinically important for the application of randomized trial data to patient care. HTE estimation equations, derived using either a conventional regression approach or newer machine learning methods, have been increasingly published in high-profile medical journals. We sought to determine how often false identification of HTEs may occur through internal development of risk equations from randomized trials.
 
@@ -16,3 +16,5 @@ Sanjay Basu, M.D., Ph.D.,1,2* James Faghmous, Ph.D.,3 Jeremy B. Sussman, M.D., M
 
 *to whom correspondence should be addressed:
 Email: basus@stanford.edu
+
+<a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-nc-sa/4.0/80x15.png" /></a><br />This work is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/">Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License</a>.
