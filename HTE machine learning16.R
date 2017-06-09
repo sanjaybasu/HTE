@@ -30,17 +30,15 @@ phtepos = 2 # those covariates creating more than average treatment effect (incr
 phteneg = 2 # those covariates creating less than average treatment effect (reducing drug benefits)
 peff = phtepos+phteneg
 trialpop = 6000
-iters=1
-case = 1
-coriter=1
+iters=10000
 
-#for (coriter in 1:4)  {  # iterate the degree of correlation among candidate covariates
+for (coriter in 1:4)  {  # iterate the degree of correlation among candidate covariates
    corj=log(coriter)*.45272+.19628  # varies the correlation among covariates stepwise from 0.125 to 0.33 to 0.5 to 0 (if coriter = 4)
   x = round(rCopula(n,normalCopula(corj,dim=p)))  
   if (coriter==4) x = matrix(rbinom(n*p,1,.5),ncol=p)
   #cor(x)
 
-#for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, no HTE; (4) no ATE, no HTE
+for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, no HTE; (4) no ATE, no HTE
   
     ate=0*(case==1)+0.3*(case>1)  # chosen to have typical ATE in CVD treatment trials of about a 5% absolute risk reduction
     hte=2*(case<3)+0*(case==3)   # chosen to have typical theorized HTE in CVD treatment trials of about +/- 5% absolute risk IQR
@@ -503,9 +501,9 @@ coriter=1
     save(errcon, file=paste("HTEerrcon",case,coriter,".RData",sep=""))
 
 
-#  }
+  }
   
-#}
+}
 
 proc.time() - ptm
 
