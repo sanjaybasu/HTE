@@ -20,9 +20,11 @@ library(randomForest)
 library(ggplot2)
 library(xgboost)
 library(data.table)
-library(h2o)  
+library(h2o)  # First install from CRAN
 library(h2oEnsemble)
+localH2O <- h2o.init(nthreads = -1)
 
+iters = 10000
 n = 1e6
 p = 20 # total covariates eligible for model selection
 preal = 8 # covariates affecting baseline risk
@@ -30,16 +32,14 @@ phtepos = 2 # those covariates creating more than average treatment effect (incr
 phteneg = 2 # those covariates creating less than average treatment effect (reducing drug benefits)
 peff = phtepos+phteneg
 trialpop = 6000
-iters=10000
 
 for (coriter in 1:4)  {  # iterate the degree of correlation among candidate covariates
-   corj=log(coriter)*.45272+.19628  # varies the correlation among covariates stepwise from 0.125 to 0.33 to 0.5 to 0 (if coriter = 4)
+  corj=log(coriter)*.45272+.19628  # varies the correlation among covariates stepwise from 0.125 to 0.33 to 0.5 to 0 (if coriter = 4)
   x = round(rCopula(n,normalCopula(corj,dim=p)))  
   if (coriter==4) x = matrix(rbinom(n*p,1,.5),ncol=p)
   #cor(x)
 
 for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, no HTE; (4) no ATE, no HTE
-  
     ate=0*(case==1)+0.3*(case>1)  # chosen to have typical ATE in CVD treatment trials of about a 5% absolute risk reduction
     hte=2*(case<3)+0*(case==3)   # chosen to have typical theorized HTE in CVD treatment trials of about +/- 5% absolute risk IQR
     if (case==4) ate = 0
@@ -164,7 +164,6 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
       if (ii>1) {name <- c(name, nextx)}
     }
     ffalse=c(unlist(strsplit(ffalse,", ")))
-  
     
  for (iter in 1:iters) {
       print(coriter)
@@ -227,7 +226,7 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
         dummypass = (hlp>.05)&(auc[[1]]>.7)&(sumwrongs>.05)
         dummypass7 = (auc[[1]]>.7)&(sumwrongs>.05)
         dummypass8 = (auc[[1]]>.8)&(sumwrongs>.05)
-
+        
         correctharmv[iter] = correctharm/trialpop
         correctnonev[iter] = correctnone/trialpop
         correctbenv[iter] = correctben/trialpop
@@ -241,7 +240,7 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
         dummypassv[iter] = dummypass
         dummypassv7[iter] = dummypass7
         dummypassv8[iter] = dummypass8
-
+        
 
         valbaseriskest = predict.glm(classicalmodelaic,newdata=valdatanorx,type="response")
         valnewriskest = predict.glm(classicalmodelaic,newdata=valdataallrx,type="response")
@@ -281,8 +280,7 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
 
       #### superlearner ####
 
-     localH2O <- h2o.init(nthreads=-1, max_mem_size="16g") 
-        
+      
       train <- as.h2o(trialdata[,1:(p+2)])
       test <- as.h2o(valdata[,1:(p+2)])
       y <- "y"
@@ -295,71 +293,120 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
       
       
       
+      # Random Grid Search (e.g. 120 second maximum)
+      # This is set to run fairly quickly, increase max_runtime_secs 
+      # or max_models to cover more of the hyperparameter space.
+      # Also, you can expand the hyperparameter space of each of the 
+      # algorithms by modifying the hyper param code below.
       
-       learner <- c("h2o.glm.1","h2o.glm.2", "h2o.glm.3", "h2o.randomForest.1", "h2o.gbm.1","h2o.deeplearning.1", "h2o.deeplearning.2")
-      #learner <- c("h2o.deeplearning.1", "h2o.deeplearning.2")
+      search_criteria <- list(strategy = "RandomDiscrete", 
+                              max_runtime_secs = 120)
+      nfolds <- 5
       
-      metalearner <- "h2o.glm_nn"
+      # GBM Hyperparameters
+      learn_rate_opt <- c(0.01, 0.03) 
+      max_depth_opt <- c(3, 4, 5, 6, 9)
+      sample_rate_opt <- c(0.7, 0.8, 0.9, 1.0)
+      col_sample_rate_opt <- c(0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8)
+      hyper_params <- list(learn_rate = learn_rate_opt,
+                           max_depth = max_depth_opt, 
+                           sample_rate = sample_rate_opt,
+                           col_sample_rate = col_sample_rate_opt)
       
-      family= "binomial"
+      gbm_grid <- h2o.grid("gbm", x = x, y = y,
+                           training_frame = train,
+                           ntrees = 100,
+                           seed = 1,
+                           nfolds = nfolds,
+                           fold_assignment = "Modulo",
+                           keep_cross_validation_predictions = TRUE,
+                           hyper_params = hyper_params,
+                           search_criteria = search_criteria)
+      gbm_models <- lapply(gbm_grid@model_ids, function(model_id) h2o.getModel(model_id))
       
       
       
+      # RF Hyperparamters
+      mtries_opt <- 8:20 
+      max_depth_opt <- c(5, 10, 15, 20, 25)
+      sample_rate_opt <- c(0.7, 0.8, 0.9, 1.0)
+      col_sample_rate_per_tree_opt <- c(0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8)
+      hyper_params <- list(mtries = mtries_opt,
+                           max_depth = max_depth_opt,
+                           sample_rate = sample_rate_opt,
+                           col_sample_rate_per_tree = col_sample_rate_per_tree_opt)
       
-      create_h2o_glm_wrappers <- function(alphas = c(0.0, 0.5, 1.0)) {
-        for (i in seq(length(alphas))) {
-          alpha <- alphas[i]
-          body <- sprintf(' <- function(..., alpha = %s) h2o.glm.wrapper(..., alpha = alpha)', alpha)
-          eval(parse(text = paste('h2o.glm.', i, body, sep = '')), envir = .GlobalEnv)
-        }
-      }
-      create_h2o_glm_wrappers()
-      h2o.gbm.1 <- function(..., ntrees = 100, seed = 1) h2o.gbm.wrapper(..., ntrees = ntrees, seed = seed)
-      h2o.randomForest.1 <- function(..., ntrees = 100, nbins = 10, seed = 1) h2o.randomForest.wrapper(..., ntrees = ntrees, nbins = nbins, seed = seed)
-      h2o.deeplearning.1 <- function(..., hidden = c(500,500), activation = "Rectifier", seed = 1)  h2o.deeplearning.wrapper(..., hidden = hidden, activation = activation, seed = seed)
-      h2o.deeplearning.2 <- function(..., hidden = c(200,200,200), activation = "Tanh", seed = 1)  h2o.deeplearning.wrapper(..., hidden = hidden, activation = activation, seed = seed)
+      rf_grid <- h2o.grid("randomForest", x = x, y = y,
+                          training_frame = train,
+                          ntrees = 200,
+                          seed = 1,
+                          nfolds = nfolds,
+                          fold_assignment = "Modulo",
+                          keep_cross_validation_predictions = TRUE,                    
+                          hyper_params = hyper_params,
+                          search_criteria = search_criteria)
+      rf_models <- lapply(rf_grid@model_ids, function(model_id) h2o.getModel(model_id))
       
       
+      
+      # Deeplearning Hyperparamters
+      activation_opt <- c("Rectifier", "RectifierWithDropout", 
+                          "Maxout", "MaxoutWithDropout") 
+      hidden_opt <- list(c(10,10), c(20,15), c(50,50,50))
+      l1_opt <- c(0, 1e-3, 1e-5)
+      l2_opt <- c(0, 1e-3, 1e-5)
+      hyper_params <- list(activation = activation_opt,
+                           hidden = hidden_opt,
+                           l1 = l1_opt,
+                           l2 = l2_opt)
+      
+      dl_grid <- h2o.grid("deeplearning", x = x, y = y,
+                          training_frame = train,
+                          epochs = 15,
+                          seed = 1,
+                          nfolds = nfolds,
+                          fold_assignment = "Modulo",
+                          keep_cross_validation_predictions = TRUE,                    
+                          hyper_params = hyper_params,
+                          search_criteria = search_criteria)
+      dl_models <- lapply(dl_grid@model_ids, function(model_id) h2o.getModel(model_id))
+      
+      
+      
+      # GLM Hyperparamters
+      alpha_opt <- seq(0,1,0.1)
+      lambda_opt <- c(0,1e-7,1e-5,1e-3,1e-1)
+      hyper_params <- list(alpha = alpha_opt,
+                           lambda = lambda_opt)
+      
+      glm_grid <- h2o.grid("glm", x = x, y = y,
+                           training_frame = train,
+                           family = "binomial",
+                           nfolds = nfolds,
+                           fold_assignment = "Modulo",
+                           keep_cross_validation_predictions = TRUE,                    
+                           hyper_params = hyper_params,
+                           search_criteria = search_criteria)
+      glm_models <- lapply(glm_grid@model_ids, function(model_id) h2o.getModel(model_id))
+      
+      
+      # Create a list of all the base models
+      models <- c(gbm_models, rf_models, dl_models, glm_models)
+      
+      # Specify a defalt GLM as the metalearner
+      metalearner <- "h2o.glm.wrapper"
+      
+      # Stack models
+      stack <- h2o.stack(models = models, 
+                         response_frame = train[,y],
+                         metalearner = metalearner)
+      
+      
+      # GLM restricted to non-negative weights as a metalearner
       h2o.glm_nn <- function(..., non_negative = TRUE) h2o.glm.wrapper(..., non_negative = non_negative)
-      
-      
-      rffit = h2o.ensemble(x = 2:(p+2), y = 1, training_frame = train,
-                           family = family,
-                           learner = learner,
-                           metalearner = metalearner,
-                           cvControl = list(V = 10, shuffle = TRUE))
-      
-
-      
-      
-      # 
-      # rffit = h2o.ensemble(x = 2:(p+2), y = 1, training_frame = train,
-      #                      family = family,
-      #                      learner = learner,
-      #                      metalearner = metalearner,
-      #                      cvControl = list(V = 10, shuffle = TRUE))
-      # 
-
-      
-      #pred <- predict(object = rffit, newdata = train)$pred[,3]
-      
-      
-      # rffit = h2o.deeplearning(y = 1, x = 2:(p+2), training_frame = train)
-      
-      # rffit <- SuperLearner(Y = trialdata[,"y"], X = trialdata[,2:(p+3-1)],
-      #                        SL.library = c("SL.knn","SL.glmnet","SL.randomForest","SL.gam","SL.gbm"),
-      #                        verbose = F,
-      #                        family = binomial(),
-      #                        method = "method.AUC")
-      
-      #rffit <- gbm(as.formula(paste("y~treatment+", paste(c(ftrue,ffalse), collapse="+"))),distribution = "bernoulli", data=trialdata, n.trees=1000, cv.folds=10, n.cores=2, interaction.depth=3, bag.fraction=0.5, shrinkage=0.1)
-      #best.iter <- gbm.perf(rffit,method="cv")
-      
-      # fitControl <- trainControl(method = "cv", number = 10, repeats = 1, search = "random")
-      # rffit <- train(x=trialdata[,2:(p+3-1)],y = as.factor(trialdata[,"y"]),method = "xgbTree", trControl = fitControl)
-      
-      #rffit <- randomForest(x=trialdata[,2:(p+3-1)],y = as.factor(trialdata[,"y"]),  data=trialdata)
-      
+      rffit <- h2o.metalearn(stack, metalearner = "h2o.glm_nn")
+      perf3 <- h2o.ensemble_performance(rffit, newdata = train, score_base_models = FALSE)
+     
       
       trialdatanorxh2o = trialdatanorx[,1:(p+2)]
       trialdatanorxh2o[,1] = factor(trialdatanorxh2o[,1])
@@ -455,8 +502,8 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
       valrfdummypassv[iter] = valrfdummypass
       
       
-      h2o.shutdown(prompt = F)
-   }
+      
+    }
     
     
     statsout = matrix(c(mean(biasv),quantile(biasv,c(.025,.975)),
@@ -495,12 +542,12 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
     
     errcon = data.frame(errcon,row.names=c("conventional calibration","conventional 7","conventional 8","gbm calibration","gbm 7","gbm 8","conventional validation","gbm validation"))
     colnames(errcon)=c(">5% incorrectly predicted, Cstat>0.7, HLtest pass")
-
+    
     save(statsout, file=paste("HTEstatsout",case,coriter,".RData",sep=""))
     save(clinout, file=paste("HTEclinout",case,coriter,".RData",sep=""))
     save(errcon, file=paste("HTEerrcon",case,coriter,".RData",sep=""))
 
-
+    
   }
   
 }
