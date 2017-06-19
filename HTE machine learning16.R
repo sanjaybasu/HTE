@@ -323,7 +323,8 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
                            fold_assignment = "Modulo",
                            keep_cross_validation_predictions = TRUE,
                            hyper_params = hyper_params,
-                           search_criteria = search_criteria)
+                           search_criteria = search_criteria,
+                           calibrate_model=T, calibration_frame = training_frame)
       gbm_models <- lapply(gbm_grid@model_ids, function(model_id) h2o.getModel(model_id))
       
       
@@ -346,7 +347,8 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
                           fold_assignment = "Modulo",
                           keep_cross_validation_predictions = TRUE,                    
                           hyper_params = hyper_params,
-                          search_criteria = search_criteria)
+                          search_criteria = search_criteria, 
+                          calibrate_model=T, calibration_frame = training_frame)
       rf_models <- lapply(rf_grid@model_ids, function(model_id) h2o.getModel(model_id))
       
       
