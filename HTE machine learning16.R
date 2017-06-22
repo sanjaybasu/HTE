@@ -303,7 +303,7 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
       
       search_criteria <- list(strategy = "RandomDiscrete", 
                               max_runtime_secs = 120)
-      nfolds <- 5
+      nfolds <- 10
       
       # GBM Hyperparameters
       learn_rate_opt <- c(0.01, 0.03) 
@@ -317,7 +317,7 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
       
       gbm_grid <- h2o.grid("gbm", x = x, y = y,
                            training_frame = train,
-                           ntrees = 100,
+                           ntrees = 4000,
                            seed = 1,
                            nfolds = nfolds,
                            fold_assignment = "Modulo",
@@ -341,7 +341,7 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
       
       rf_grid <- h2o.grid("randomForest", x = x, y = y,
                           training_frame = train,
-                          ntrees = 200,
+                          ntrees = 4000,
                           seed = 1,
                           nfolds = nfolds,
                           fold_assignment = "Modulo",
@@ -378,7 +378,7 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
       
       
       # GLM Hyperparamters
-      alpha_opt <- seq(0,1,0.1)
+      alpha_opt <- seq(0,1,0.1,0.5)
       lambda_opt <- c(0,1e-7,1e-5,1e-3,1e-1)
       hyper_params <- list(alpha = alpha_opt,
                            lambda = lambda_opt)
