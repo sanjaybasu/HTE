@@ -378,7 +378,7 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
       
       
       # GLM Hyperparamters
-      alpha_opt <- seq(0,1,0.1,0.5)
+      alpha_opt <- seq(0,1,0.1)
       lambda_opt <- c(0,1e-7,1e-5,1e-3,1e-1)
       hyper_params <- list(alpha = alpha_opt,
                            lambda = lambda_opt)
