@@ -1,7 +1,5 @@
 rm(list=ls())
 ptm <- proc.time()
-
- # First install from CRAN
 library(matrixStats)
 library(psych)
 library(bindata)
@@ -22,11 +20,9 @@ library(randomForest)
 library(ggplot2)
 library(xgboost)
 library(data.table)
-library(h2o) 
+library(h2o)  
 library(h2oEnsemble)
-localH2O <- h2o.init(nthreads = -1)
 
-iters = 10000
 n = 1e6
 p = 20 # total covariates eligible for model selection
 preal = 8 # covariates affecting baseline risk
@@ -34,14 +30,18 @@ phtepos = 2 # those covariates creating more than average treatment effect (incr
 phteneg = 2 # those covariates creating less than average treatment effect (reducing drug benefits)
 peff = phtepos+phteneg
 trialpop = 6000
+iters=1000
 
 for (coriter in 1:4)  {  # iterate the degree of correlation among candidate covariates
-  corj=log(coriter)*.45272+.19628  # varies the correlation among covariates stepwise from 0.125 to 0.33 to 0.5 to 0 (if coriter = 4)
+   corj=log(coriter)*.45272+.19628  # varies the correlation among covariates stepwise from 0.125 to 0.33 to 0.5 to 0 (if coriter = 4)
   x = round(rCopula(n,normalCopula(corj,dim=p)))  
   if (coriter==4) x = matrix(rbinom(n*p,1,.5),ncol=p)
   #cor(x)
 
+
+
 for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, no HTE; (4) no ATE, no HTE
+  
     ate=0*(case==1)+0.3*(case>1)  # chosen to have typical ATE in CVD treatment trials of about a 5% absolute risk reduction
     hte=2*(case<3)+0*(case==3)   # chosen to have typical theorized HTE in CVD treatment trials of about +/- 5% absolute risk IQR
     if (case==4) ate = 0
@@ -85,6 +85,11 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
     dummypassv = rep(0, iters)
     dummypassv7 = rep(0, iters)
     dummypassv8 = rep(0, iters)
+    cordummypassv = rep(0,iters)
+    sumwrongsv = rep(0,iters)
+    corgoodv = rep(0,iters)
+    loosecordummypassv = rep(0,iters)
+    loosecorgoodv = rep(0,iters)
     
     rfcorrectharmv = rep(0,iters)
     rfcorrectnonev = rep(0,iters)
@@ -99,6 +104,11 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
     rfdummypassv = rep(0, iters)
     rfdummypassv7 = rep(0, iters)
     rfdummypassv8 = rep(0, iters)
+    rfcordummypassv = rep(0,iters)
+    rfsumwrongsv  = rep(0,iters)
+    rfcorgoodv = rep(0,iters)
+    rfloosecordummypassv = rep(0,iters)
+    rfloosecorgoodv = rep(0,iters)
     
     valcorrectharmv = rep(0,iters)
     valcorrectnonev = rep(0,iters)
@@ -166,8 +176,9 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
       if (ii>1) {name <- c(name, nextx)}
     }
     ffalse=c(unlist(strsplit(ffalse,", ")))
-    
- for (iter in 1:iters) {
+  
+
+    for (iter in 1:iters) {
       print(coriter)
       print(case)
       print(iter)
@@ -229,6 +240,38 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
         dummypass7 = (auc[[1]]>.7)&(sumwrongs>.05)
         dummypass8 = (auc[[1]]>.8)&(sumwrongs>.05)
         
+        newrisktrial = newrisk[sample(nrow(popdata), trialpop)]
+        baserisktrial = baserisk[sample(nrow(popdata), trialpop)]
+        
+        
+        bencats = c(-.01,.01)
+        
+        bencat = 1*(arrest<=bencats[1])+
+          2*((arrest>bencats[1])&(arrest<bencats[2]))+
+          3*((arrest>=bencats[2]))
+        
+        correstab = describeBy(trialdata$y,list(bencat,trialdata$treatment),mat=TRUE)
+        test1=prop.test(x=c(correstab[1,5]*correstab[1,6],correstab[4,5]*correstab[4,6]), n=c(correstab[1,5],correstab[4,5]), correct=T)
+        test2=prop.test(x=c(correstab[2,5]*correstab[2,6],correstab[5,5]*correstab[5,6]), n=c(correstab[2,5],correstab[5,5]), correct=T)
+        test3=prop.test(x=c(correstab[3,5]*correstab[3,6],correstab[6,5]*correstab[6,6]), n=c(correstab[3,5],correstab[6,5]), correct=T)
+      
+        correstest1 = (test1$estimate["prop 2"]<test1$estimate["prop 1"])&(test1$p.value<.05)
+        correstest2 = (test2$p.value>0.05)
+        correstest3 = (test3$estimate["prop 2"]>test3$estimate["prop 1"])&(test3$p.value<.05)
+        correstest = (correstest1==1)&(correstest2==1)&(correstest3==1)
+        
+        cordummypass = (sumwrongs>0.05)&(correstest==1)
+        corgood = (sumwrongs<0.05)&(correstest==1)
+
+        correstest1 = (test1$estimate["prop 2"]<test1$estimate["prop 1"])
+        correstest2 = (test2$p.value>0.05)
+        correstest3 = (test3$estimate["prop 2"]>test3$estimate["prop 1"])
+        correstest = (correstest1==1)&(correstest2==1)&(correstest3==1)
+        
+        loosecordummypass = (sumwrongs>0.05)&(correstest==1)
+        loosecorgood = (sumwrongs<0.05)&(correstest==1)
+        
+
         correctharmv[iter] = correctharm/trialpop
         correctnonev[iter] = correctnone/trialpop
         correctbenv[iter] = correctben/trialpop
@@ -242,8 +285,12 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
         dummypassv[iter] = dummypass
         dummypassv7[iter] = dummypass7
         dummypassv8[iter] = dummypass8
+        cordummypassv[iter] = cordummypass
+        sumwrongsv[iter] = sumwrongs
+        corgoodv[iter] = corgood
+        loosecordummypassv[iter] = loosecordummypass
+        loosecorgoodv[iter] = loosecordummypasscorgood
         
-
         valbaseriskest = predict.glm(classicalmodelaic,newdata=valdatanorx,type="response")
         valnewriskest = predict.glm(classicalmodelaic,newdata=valdataallrx,type="response")
 
@@ -282,7 +329,9 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
 
       #### superlearner ####
 
-      
+     localH2O <- h2o.init(nthreads=-1, max_mem_size="16g") 
+        h2o.removeAll() 
+        
       train <- as.h2o(trialdata[,1:(p+2)])
       test <- as.h2o(valdata[,1:(p+2)])
       y <- "y"
@@ -317,14 +366,13 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
       
       gbm_grid <- h2o.grid("gbm", x = x, y = y,
                            training_frame = train,
-                           ntrees = 4000,
+                           ntrees = 2000,
                            seed = 1,
                            nfolds = nfolds,
                            fold_assignment = "Modulo",
                            keep_cross_validation_predictions = TRUE,
                            hyper_params = hyper_params,
-                           search_criteria = search_criteria,
-                           calibrate_model=T, calibration_frame = training_frame)
+                           search_criteria = search_criteria)
       gbm_models <- lapply(gbm_grid@model_ids, function(model_id) h2o.getModel(model_id))
       
       
@@ -341,14 +389,13 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
       
       rf_grid <- h2o.grid("randomForest", x = x, y = y,
                           training_frame = train,
-                          ntrees = 4000,
+                          ntrees = 2000,
                           seed = 1,
                           nfolds = nfolds,
                           fold_assignment = "Modulo",
                           keep_cross_validation_predictions = TRUE,                    
                           hyper_params = hyper_params,
-                          search_criteria = search_criteria, 
-                          calibrate_model=T, calibration_frame = training_frame)
+                          search_criteria = search_criteria)
       rf_models <- lapply(rf_grid@model_ids, function(model_id) h2o.getModel(model_id))
       
       
@@ -397,8 +444,10 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
       # Create a list of all the base models
       models <- c(gbm_models, rf_models, dl_models, glm_models)
       
-      # Specify a defalt GLM as the metalearner
-      metalearner <- "h2o.glm.wrapper"
+      # Specify a nonnegative weight GLM as the metalearner
+      h2o.glm_nn <- function(..., non_negative = T) h2o.glm.wrapper(..., non_negative = non_negative) # define meta-learner [GLM restricted to non-neg weights, which is shown in the literature to improve outcomes from ensembles]
+      
+      metalearner <- "h2o.glm_nn"
       
       # Stack models
       stack <- h2o.stack(models = models, 
@@ -409,9 +458,9 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
       # GLM restricted to non-negative weights as a metalearner
       h2o.glm_nn <- function(..., non_negative = TRUE) h2o.glm.wrapper(..., non_negative = non_negative)
       rffit <- h2o.metalearn(stack, metalearner = "h2o.glm_nn")
-      perf3 <- h2o.ensemble_performance(rffit, newdata = train, score_base_models = FALSE)
-     
+      perf <- h2o.ensemble_performance(rffit, newdata = train, score_base_models = T)
       
+
       trialdatanorxh2o = trialdatanorx[,1:(p+2)]
       trialdatanorxh2o[,1] = factor(trialdatanorxh2o[,1])
       testnorx <- as.h2o(trialdatanorxh2o)
@@ -444,6 +493,32 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
       rfdummypass7 = (rfauc[[1]]>.7)&(rfsumwrongs>.05)
       rfdummypass8 = (rfauc[[1]]>.8)&(rfsumwrongs>.05)
       
+      rfbencat = 1*(rfarrest<=bencats[1])+
+        2*((rfarrest>bencats[1])&(rfarrest<bencats[2]))+
+        3*((rfarrest>=bencats[2]))
+      
+      rfcorrestab = describeBy(trialdata$y,list(rfbencat,trialdata$treatment),mat=TRUE)
+      rftest1=prop.test(x=c(rfcorrestab[1,5]*rfcorrestab[1,6],rfcorrestab[4,5]*rfcorrestab[4,6]), n=c(rfcorrestab[1,5],rfcorrestab[4,5]), correct=T)
+      rftest2=prop.test(x=c(rfcorrestab[2,5]*rfcorrestab[2,6],rfcorrestab[5,5]*rfcorrestab[5,6]), n=c(rfcorrestab[2,5],rfcorrestab[5,5]), correct=T)
+      rftest3=prop.test(x=c(rfcorrestab[3,5]*rfcorrestab[3,6],rfcorrestab[6,5]*rfcorrestab[6,6]), n=c(rfcorrestab[3,5],rfcorrestab[6,5]), correct=T)
+      
+      rfcorrestest1 = (rftest1$estimate["prop 2"]<rftest1$estimate["prop 1"])&(rftest1$p.value<.05)
+      rfcorrestest2 = (rftest2$p.value>0.05)
+      rfcorrestest3 = (rftest3$estimate["prop 2"]>rftest3$estimate["prop 1"])&(rftest3$p.value<.05)
+      rfcorrestest = (rfcorrestest1==1)&(rfcorrestest2==1)&(rfcorrestest3==1)
+      
+      rfcordummypass = (rfsumwrongs>0.05)&(rfcorrestest==1)
+      rfcorgood = (rfsumwrongs<0.05)&(rfcorrestest==1)
+      
+      rfcorrestest1 = (rftest1$estimate["prop 2"]<rftest1$estimate["prop 1"])
+      rfcorrestest2 = (rftest2$p.value>0.05)
+      rfcorrestest3 = (rftest3$estimate["prop 2"]>rftest3$estimate["prop 1"])
+      rfcorrestest = (rfcorrestest1==1)&(rfcorrestest2==1)&(rfcorrestest3==1)
+      
+      rfloosecordummypass = (rfsumwrongs>0.05)&(rfcorrestest==1)
+      rfloosecorgood = (rfsumwrongs<0.05)&(rfcorrestest==1)
+      
+      
       rfcorrectharmv[iter] = rfcorrectharm/trialpop
       rfcorrectnonev[iter] = rfcorrectnone/trialpop
       rfcorrectbenv[iter] = rfcorrectben/trialpop
@@ -457,7 +532,11 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
       rfdummypassv[iter] = rfdummypass
       rfdummypassv7[iter] = rfdummypass7
       rfdummypassv8[iter] = rfdummypass8
-      
+      rfcordummypassv[iter] = rfcordummypass
+      rfsumwrongsv[iter] = rfsumwrongs
+      rfcorgoodv[iter] = rfcorgood
+      rfloosecordummypassv[iter] = rfloosecordummypass
+      rfloosecorgoodv[iter] = rfloosecorgood
       
       vtrialdatah2o = valdata[,1:(p+2)]
       vtrialdatah2o[,1] = factor(valdata[,1])
@@ -506,35 +585,45 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
       valrfdummypassv[iter] = valrfdummypass
       
       
-      
     }
     
     
-    statsout = matrix(c(mean(biasv),quantile(biasv,c(.025,.975)),
-                        mean(rfbiasv),quantile(rfbiasv,c(.025,.975)),
-                        mean(aucv),quantile(aucv,c(.025,.975)),
-                        mean(rfaucv),quantile(rfaucv,c(.025,.975)),
-                        mean(hlpv),quantile(hlpv,c(.025,.975)),
-                        mean(rfhlpv),quantile(rfhlpv,c(.025,.975)),
-                        mean(valbiasv),quantile(valbiasv,c(.025,.975)),
-                        mean(valrfbiasv),quantile(valrfbiasv,c(.025,.975)),
-                        mean(valaucv),quantile(valaucv,c(.025,.975)),
-                        mean(valrfaucv),quantile(valrfaucv,c(.025,.975)),
-                        mean(valhlpv),quantile(valhlpv,c(.025,.975)),
-                        mean(valrfhlpv),quantile(valrfhlpv,c(.025,.975))),ncol=3,byrow=T)
+    statsout = matrix(c(mean(na.omit(biasv)),quantile(biasv,c(.025,.975)),
+                        mean(na.omit(rfbiasv)),quantile(rfbiasv,c(.025,.975)),
+                        mean(na.omit(aucv)),quantile(aucv,c(.025,.975)),
+                        mean(na.omit(rfaucv)),quantile(rfaucv,c(.025,.975)),
+                        mean(na.omit(hlpv)),quantile(hlpv,c(.025,.975)),
+                        mean(na.omit(rfhlpv)),quantile(rfhlpv,c(.025,.975)),
+                        mean(na.omit(valbiasv)),quantile(valbiasv,c(.025,.975)),
+                        mean(na.omit(valrfbiasv)),quantile(valrfbiasv,c(.025,.975)),
+                        mean(na.omit(valaucv)),quantile(valaucv,c(.025,.975)),
+                        mean(na.omit(valrfaucv)),quantile(valrfaucv,c(.025,.975)),
+                        mean(na.omit(valhlpv)),quantile(valhlpv,c(.025,.975)),
+                        mean(na.omit(valrfhlpv)),quantile(valrfhlpv,c(.025,.975))),ncol=3,byrow=T)
     
-    clinout=matrix(c(mean(correctharmv),quantile(correctharmv,c(.025,.975)),mean(rfcorrectharmv),quantile(rfcorrectharmv,c(.025,.975)),
-                     mean(correctnonev),quantile(correctnonev,c(.025,.975)),mean(rfcorrectnonev),quantile(rfcorrectnonev,c(.025,.975)),
-                     mean(correctbenv),quantile(correctbenv,c(.025,.975)),mean(rfcorrectbenv),quantile(rfcorrectbenv,c(.025,.975)),
-                     mean(wrongharmv),quantile(wrongharmv,c(.025,.975)), mean(rfwrongharmv),quantile(rfwrongharmv,c(.025,.975)),
-                     mean(wrongnonv),quantile(wrongnonv,c(.025,.975)),mean(rfwrongnonv),quantile(rfwrongnonv,c(.025,.975)),
-                     mean(wrongbenv),quantile(wrongbenv,c(.025,.975)),mean(rfwrongbenv),quantile(rfwrongbenv,c(.025,.975)),
-                     mean(valcorrectharmv),quantile(valcorrectharmv,c(.025,.975)),mean(valrfcorrectharmv),quantile(valrfcorrectharmv,c(.025,.975)),
-                     mean(valcorrectnonev),quantile(valcorrectnonev,c(.025,.975)),mean(valrfcorrectnonev),quantile(valrfcorrectnonev,c(.025,.975)),
-                     mean(valcorrectbenv),quantile(valcorrectbenv,c(.025,.975)),mean(valrfcorrectbenv),quantile(valrfcorrectbenv,c(.025,.975)),
-                     mean(valwrongharmv),quantile(valwrongharmv,c(.025,.975)),mean(valrfwrongharmv),quantile(valrfwrongharmv,c(.025,.975)),
-                     mean(valwrongnonv),quantile(valwrongnonv,c(.025,.975)),mean(valrfwrongnonv),quantile(valrfwrongnonv,c(.025,.975)),
-                     mean(valwrongbenv),quantile(valwrongbenv,c(.025,.975)),mean(valrfwrongbenv),quantile(valrfwrongbenv,c(.025,.975))),ncol=6,byrow=T)
+    clinout=matrix(c(mean(na.omit(correctharmv)),quantile(correctharmv,c(.025,.975)),mean(na.omit(rfcorrectharmv)),quantile(rfcorrectharmv,c(.025,.975)),
+                     mean(na.omit(correctnonev)),quantile(correctnonev,c(.025,.975)),mean(na.omit(rfcorrectnonev)),quantile(rfcorrectnonev,c(.025,.975)),
+                     mean(na.omit(correctbenv)),quantile(correctbenv,c(.025,.975)),mean(na.omit(rfcorrectbenv)),quantile(rfcorrectbenv,c(.025,.975)),
+                     mean(na.omit(wrongharmv)),quantile(wrongharmv,c(.025,.975)), mean(na.omit(rfwrongharmv)),quantile(rfwrongharmv,c(.025,.975)),
+                     mean(na.omit(wrongnonv)),quantile(wrongnonv,c(.025,.975)),mean(na.omit(rfwrongnonv)),quantile(rfwrongnonv,c(.025,.975)),
+                     mean(na.omit(wrongbenv)),quantile(wrongbenv,c(.025,.975)),mean(na.omit(rfwrongbenv)),quantile(rfwrongbenv,c(.025,.975)),
+                     mean(na.omit(valcorrectharmv)),quantile(valcorrectharmv,c(.025,.975)),mean(na.omit(valrfcorrectharmv)),quantile(valrfcorrectharmv,c(.025,.975)),
+                     mean(na.omit(valcorrectnonev)),quantile(valcorrectnonev,c(.025,.975)),mean(na.omit(valrfcorrectnonev)),quantile(valrfcorrectnonev,c(.025,.975)),
+                     mean(na.omit(valcorrectbenv)),quantile(valcorrectbenv,c(.025,.975)),mean(na.omit(valrfcorrectbenv)),quantile(valrfcorrectbenv,c(.025,.975)),
+                     mean(na.omit(valwrongharmv)),quantile(valwrongharmv,c(.025,.975)),mean(na.omit(valrfwrongharmv)),quantile(valrfwrongharmv,c(.025,.975)),
+                     mean(na.omit(valwrongnonv)),quantile(valwrongnonv,c(.025,.975)),mean(na.omit(valrfwrongnonv)),quantile(valrfwrongnonv,c(.025,.975)),
+                     mean(na.omit(valwrongbenv)),quantile(valwrongbenv,c(.025,.975)),mean(na.omit(valrfwrongbenv)),quantile(valrfwrongbenv,c(.025,.975))),ncol=6,byrow=T)
+    
+    newvec = matrix(c(mean(na.omit(sumwrongsv)), quantile(sumwrongsv,c(.025,.975)),
+                      mean(na.omit(cordummypassv)), quantile(cordummypassv,c(.025,.975)),
+                      mean(na.omit(corgoodv)), quantile(corgoodv, c(.025,.975)),
+                      mean(na.omit(loosecordummypassv)), quantile(loosecordummypassv,c(.025,.975)),
+                      mean(na.omit(loosecorgoodv)), quantile(loosecorgoodv, c(.025,.975)),
+                      mean(na.omit(rfsumwrongsv)), quantile(rfsumwrongsv,c(.025,.975)),
+                      mean(na.omit(rfcordummypassv)), quantile(rfcordummypassv,c(.025,.975)),
+                      mean(na.omit(rfcorgoodv)), quantile(rfcorgoodv, c(.025,.975)),
+                      mean(na.omit(rfloosecordummypassv)), quantile(rfloosecordummypassv,c(.025,.975)),
+                      mean(na.omit(rfloosecordummypassv)), quantile(rfloosecordummypassv, c(.025,.975))), ncol=3,byrow=T)
     
     errcon = colSums(matrix(c(dummypassv,dummypassv7,dummypassv8,rfdummypassv,rfdummypassv7,rfdummypassv8,valdummypassv,valrfdummypassv),ncol=8,byrow=T))/iters
     
@@ -544,16 +633,20 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
     clinout = data.frame(clinout,row.names=c("correct harm prediction", "correct neut prediction","correct ben prediction","wrong harm prediction", "wrong neut prediction","wrong ben prediction","val correct harm prediction","val correct neut prediction", "val correct ben prediction","val wrong harm prediction","val wrong neut prediction", "val wrong ben prediction"))
     colnames(clinout)=c("conventional"," 95% low"," 95% high", "gbm"," 95% low"," 95% high")
     
+    newvec = data.frame(newvec,row.names=c("wrong perc conv", "bad corres pass conv","good corres pass conv","bad loose corres pass conv","good loose corres pass conv", "wrong perc ML", "bad corres pass ML", "good corres pass ML", "bad loose corres pass ML", "good loose corres pass ML"))
+    colnames(newvec)=c("mean","95lo","95hi")
+    
     errcon = data.frame(errcon,row.names=c("conventional calibration","conventional 7","conventional 8","gbm calibration","gbm 7","gbm 8","conventional validation","gbm validation"))
     colnames(errcon)=c(">5% incorrectly predicted, Cstat>0.7, HLtest pass")
-    
+
     save(statsout, file=paste("HTEstatsout",case,coriter,".RData",sep=""))
     save(clinout, file=paste("HTEclinout",case,coriter,".RData",sep=""))
     save(errcon, file=paste("HTEerrcon",case,coriter,".RData",sep=""))
+    save(newvec, file=paste("HTEnewout",case,coriter,".RData",sep=""))
 
-    
-  }
-  
+
+ }
+
 }
 
 proc.time() - ptm
