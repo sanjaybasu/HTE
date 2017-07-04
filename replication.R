@@ -30,9 +30,9 @@ phtepos = 2 # those covariates creating more than average treatment effect (incr
 phteneg = 2 # those covariates creating less than average treatment effect (reducing drug benefits)
 peff = phtepos+phteneg
 trialpop = 6000
-iters=1000
+iters=10000
 
-for (coriter in 1:4)  {  # iterate the degree of correlation among candidate covariates
+for (coriter in seq(2,4,2))  {  # iterate the degree of correlation among candidate covariates
    corj=log(coriter)*.45272+.19628  # varies the correlation among covariates stepwise from 0.125 to 0.33 to 0.5 to 0 (if coriter = 4)
   x = round(rCopula(n,normalCopula(corj,dim=p)))  
   if (coriter==4) x = matrix(rbinom(n*p,1,.5),ncol=p)
@@ -251,6 +251,9 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
           3*((arrest>=bencats[2]))
         
         correstab = describeBy(trialdata$y,list(bencat,trialdata$treatment),mat=TRUE)
+        
+        if ((sum(is.na(correstab[,5]))==0)&(dim(correstab)[1]==6)){
+          
         test1=prop.test(x=c(correstab[1,5]*correstab[1,6],correstab[4,5]*correstab[4,6]), n=c(correstab[1,5],correstab[4,5]), correct=T)
         test2=prop.test(x=c(correstab[2,5]*correstab[2,6],correstab[5,5]*correstab[5,6]), n=c(correstab[2,5],correstab[5,5]), correct=T)
         test3=prop.test(x=c(correstab[3,5]*correstab[3,6],correstab[6,5]*correstab[6,6]), n=c(correstab[3,5],correstab[6,5]), correct=T)
@@ -271,7 +274,15 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
         loosecordummypass = (sumwrongs>0.05)&(correstest==1)
         loosecorgood = (sumwrongs<0.05)&(correstest==1)
         
-
+    }
+    else
+    {
+      cordummypass=0
+      corgood=0
+      loosecordummypass=0
+      loosecorgood=0
+    }
+    
         correctharmv[iter] = correctharm/trialpop
         correctnonev[iter] = correctnone/trialpop
         correctbenv[iter] = correctben/trialpop
@@ -289,7 +300,7 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
         sumwrongsv[iter] = sumwrongs
         corgoodv[iter] = corgood
         loosecordummypassv[iter] = loosecordummypass
-        loosecorgoodv[iter] = loosecordummypasscorgood
+        loosecorgoodv[iter] = loosecorgood
         
         valbaseriskest = predict.glm(classicalmodelaic,newdata=valdatanorx,type="response")
         valnewriskest = predict.glm(classicalmodelaic,newdata=valdataallrx,type="response")
@@ -498,6 +509,8 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
         3*((rfarrest>=bencats[2]))
       
       rfcorrestab = describeBy(trialdata$y,list(rfbencat,trialdata$treatment),mat=TRUE)
+      if ((sum(is.na(rfcorrestab[,5]))==0)&(dim(rfcorrestab)[1]==6)){
+        
       rftest1=prop.test(x=c(rfcorrestab[1,5]*rfcorrestab[1,6],rfcorrestab[4,5]*rfcorrestab[4,6]), n=c(rfcorrestab[1,5],rfcorrestab[4,5]), correct=T)
       rftest2=prop.test(x=c(rfcorrestab[2,5]*rfcorrestab[2,6],rfcorrestab[5,5]*rfcorrestab[5,6]), n=c(rfcorrestab[2,5],rfcorrestab[5,5]), correct=T)
       rftest3=prop.test(x=c(rfcorrestab[3,5]*rfcorrestab[3,6],rfcorrestab[6,5]*rfcorrestab[6,6]), n=c(rfcorrestab[3,5],rfcorrestab[6,5]), correct=T)
@@ -518,6 +531,15 @@ for (case in 1:4) {  # case (1): no ATE, +/- HTE; (2): +ATE, +/- HTE; (3) +ATE, 
       rfloosecordummypass = (rfsumwrongs>0.05)&(rfcorrestest==1)
       rfloosecorgood = (rfsumwrongs<0.05)&(rfcorrestest==1)
       
+      }
+       else
+       {
+         rfcordummypass=0
+         rfcorgood=0
+         rfloosecordummypass=0
+         rfloosecorgood=0
+       }
+          
       
       rfcorrectharmv[iter] = rfcorrectharm/trialpop
       rfcorrectnonev[iter] = rfcorrectnone/trialpop
