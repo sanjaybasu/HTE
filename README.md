@@ -6,7 +6,7 @@ We simulated 10,000 randomized trials of 6,000 persons each, for each of four ty
 
 Sanjay Basu, M.D., Ph.D.,1,2* James Faghmous, Ph.D.,3 Jeremy B. Sussman, M.D., M.S.,4,5 Brian Denton, Ph.D.,6 Joseph Rigdon, Ph.D.,7 Rodney A. Hayward, M.D.4,5
 
-1 Center for Population Health Sciences and Center for Primary Care and Outcomes Research, Departments of Medicine and of Health Research and Policy, Stanford University
+1 Research and Analytics, Collective Health
 2 Center for Primary Care, Harvard Medical School
 3 Arnhold Institute for Global Health, Icahn School of Medicine, Mt. Sinai Medical Center 
 4 Center for Clinical Management Research, Veterans Affairs Ann Arbor Healthcare System
@@ -15,6 +15,4 @@ Sanjay Basu, M.D., Ph.D.,1,2* James Faghmous, Ph.D.,3 Jeremy B. Sussman, M.D., M
 7 Quantitative Sciences Unit, Stanford University
 
 *to whom correspondence should be addressed:
-Email: basus@stanford.edu
-
-<a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-nc-sa/4.0/80x15.png" /></a><br />This work is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/">Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License</a>.
+Email: sanjay_basu@hms.harvard.edu
